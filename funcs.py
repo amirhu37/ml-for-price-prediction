@@ -158,14 +158,7 @@ class trade:
         self.order_type = order_dict
         self.isNueran = isNueran
 
-    def call_data(self, len, on) :
-        date  : str  = datetime.now().strftime("%H:%M")
-        Open  : float = Symbol_data(self.symbol, self.time_frame, len, on, False)
-        Pivot : float = round(pivot_point(self.symbol, self.time_frame)[0], 2)
-        ma_1  : float = round(moving_average(self.symbol, self.time_frame,self.fast_ma, self.OHLC)[0], 2)
-        ma_2  : float = round(moving_average(self.symbol, self.time_frame,self.slow_ma, self.OHLC)[0], 2)
-        
-        return date, [Open, Pivot, ma_1, ma_2]
+
 
     def standarding(self, array):
         # Load the mean and std from saved files
@@ -178,7 +171,7 @@ class trade:
         array_scaled = scaler.transform([array])
 
         return  array_scaled
-    # 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
+
     def predictor(self,d ):
         
         model = joblib.load(self.model_addres)

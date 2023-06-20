@@ -20,35 +20,35 @@ from sklearn.discriminant_analysis import StandardScaler
 import funcs
 import TradeToolKit as kit
 # -----------   Imports     --------------------------------
-from funcs import trade
+from funcs import pivot_point, trade
 
 print(__doc__)
 # --------------INPUTS-----------------------
 logo: str = "XAUUSD"
-Time: str = "5m"
+Time: str = "30m"
 Volume: float = 0.01
 
 kill_time: str = "19:30"
 
-Model_addrs = "Models\\prime\\Random Forest model  94.53%.h5"
 
-Scale_Addrs = "Models\prime\scaler.pkl"
+Model_addrs = "Models\\prime\\MLPClassifier  96.52%.h5"
 
-Mean_Addrs = "Models\prime\mean.npy"
+Scale_Addrs = "Models\\prime\\scaler.pkl"
 
-Std_Addrs = "Models\prime\std.npy"
+Mean_Addrs = "Models\\prime\\mean.npy"
+
+Std_Addrs = "Models\\prime\\std.npy"
 
 
 # --------- Market Varibles-------------------
-SL_rate : int = 2
-TP_rate : int = 2
-TP :Literal['step', 'str', 'amount'] = 'step'
-SL :Literal['step', 'str', 'amount'] = 'step'
+SL_rate: int = 1
+TP_rate: int = 1
+TP: Literal['step', 'str', 'amount', "candle" ] = "candle"
+SL: Literal['step', 'str', 'amount', "candle" ] = "candle"
 # --------------- General Variables --------------------
 
 ma_1_len: int = 5
 ma_2_len: int = 10
-
 
 
 regiluzer: dict = {
@@ -71,19 +71,19 @@ regiluzer: dict = {
     "30m": ["30", "00"],
 
     "1h": ["00"],
-     "4h" : ['00'] }
+    "4h": ['00']}
 
 
 Time_dct: dict = {
     "1m": 2,
-    "3m" : 5,
+    "3m": 5,
     "5m": 5,
     "15m": 15,
     "30m": 30,
     "1h": 60,
 }
 
-columns = ['time', 'Open', 'pivot', 'ma 1', 'ma 2', 'symbol', 
+columns = ['time', 'Open', 'pivot', 'ma 1', 'ma 2', 'symbol',
            'volume', 'order', 'stoploss', 'takeprofit', 'comment']
 
 
@@ -102,10 +102,11 @@ logging.basicConfig(format=LOG_FORMAT,
 logger = logging.getLogger(__name__)
 # --------------- Data Processing ----------------
 
+
 def updator(Output: dict):
     price_now = kit.Symbol_data(logo, Time, 1, 'c', True)[0]
     open_price = Output["price_open"] = mt5.positions_get(symbol=logo)[
-                        0]._asdict()['price_open']
+        0]._asdict()['price_open']
 
     if Output['type'] == "buy":
         if (price_now > open_price):
@@ -121,26 +122,32 @@ def updator(Output: dict):
             print(f"tp updated: {tp_up} ")
 
 
-
 def main():
-    app = trade(symbol=logo, 
-                  time_frame=Time, 
-                  volume=Volume,
-                  fast_ma= ma_1_len,
-                  slow_ma= ma_2_len,
-                  model_addres= Model_addrs,
-                  scale_addrs= Scale_Addrs,
-                  mean_addrs= Mean_Addrs,
-                  std_adrs= Std_Addrs,
-                  OHLC= "c",
-                  order_dict = {
-                      1:"buy",
-                      2: "sell",
-                      0: "hold"},
-                    isNueran=False)
-    
+    app = trade(symbol=logo,
+                time_frame=Time,
+                volume=Volume,
+                fast_ma=ma_1_len,
+                slow_ma=ma_2_len,
+                model_addres=Model_addrs,
+                scale_addrs=Scale_Addrs,
+                mean_addrs=Mean_Addrs,
+                std_adrs=Std_Addrs,
+                OHLC="c",
+                order_dict={
+                    1: "buy",
+                    2: "sell",
+                    0: "hold"},
+                isNueran=False)
 
-    time_stamp , data = app.call_data(len = 1 , on = 'c')
+    time_stamp  : str  = datetime.now().strftime("%H:%M")
+
+    data = [
+        kit.Symbol_data(logo, Time, 1, 'o', False)[0],
+        round(funcs.pivot_point(logo, Time)[0], 2),
+        round(kit.moving_average(logo, Time,ma_1_len, "c")[0], 2),
+        round(kit.moving_average(logo, Time,ma_2_len, "c")[0], 2),
+    ]
+    print(data)
     scaling = app.standarding(data)
     predict = app.predictor(scaling)
     print(predict)
@@ -148,52 +155,51 @@ def main():
         print(predict)
         if not mt5.positions_get(symbol=logo):
             request, result = app.send_order(
-                position= predict,
-                sl_type= SL,
-                tp_type= TP,
-                sl_rate= SL_rate,
-                tp_rate= TP_rate,
-                Comment = "class" )
+                position=predict,
+                sl_type=SL,
+                tp_type=TP,
+                sl_rate=SL_rate,
+                tp_rate=TP_rate,
+                Comment="class")
 
             total = {
-                "time" : time_stamp ,
-                "price" : request['price'],
+                "time": time_stamp,
+                "price": request['price'],
                 "Open": data[0],
-                "pivot" : data[1] ,
-                "ma 1" : data[2]  ,
+                "pivot": data[1],
+                "ma 1": data[2],
                 "ma 2": data[3],
 
-                "symbol" : logo,
-                "volume" : Volume,
-                'order' :  predict ,
-                "stoploss" : request['sl'],
-                "takeprofit" : request['tp'],
-                "comment" : result  ['comment']   }
-        
+                "symbol": logo,
+                "volume": Volume,
+                'order':  predict,
+                "stoploss": request['sl'],
+                "takeprofit": request['tp'],
+                "comment": result['comment']}
+
             journal = app.journal(total)
-            logger.info(  ",".join(str(value) for value in journal.values()))
-            return { "price_open" :data[0], 'type': predict, "comment": result  ['comment']}
+            logger.info(",".join(str(value) for value in journal.values()))
+            return {"price_open": data[0], 'type': predict, "comment": result['comment']}
         else:
-            return { "price_open" : 0.0, 'type': predict, "comment" : "Already exist"}    
-    
+            return {"price_open": 0.0, 'type': predict, "comment": "Already exist"}
+
     else:
-        return { "price_open" : 0.0, 'type': predict, "comment" : "No oreder"}
+        return {"price_open": 0.0, 'type': predict, "comment": "No oreder"}
 
 
-
-# print(main  ())
+print(main  ())
 ###         EXECUTE      ###
 counter = 0
 while True:
-    # break
+    break
     try:
-        
+
         if datetime.now().strftime('%M') in regiluzer[Time]:
             try:
                 os.system('cls')
                 out = main()
                 print(out)
-                sleep(3 * Time_dct[Time] * 60)
+                sleep(Time_dct[Time] * 60)
                 funcs.kill_app(kill_time)
             except Exception as e:
                 print(f"""Exception Error: \n {e}
@@ -201,7 +207,7 @@ while True:
 
             if mt5.positions_get(symbol=logo):
                 try:
-                    updator(Output= out)
+                    updator(Output=out)
                 except:
                     sleep(1)
 

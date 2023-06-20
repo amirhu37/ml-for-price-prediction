@@ -691,6 +691,54 @@ def amount_tp(sym, type, percent_equity = 1):
     
     return tp
 
+def candle_sl(sym,  type, time_frame, candle_count = 1):
+
+    sym = sym.upper()
+    type_ = type.lower()
+
+    highs = Symbol_data(sym, time_frame , candle_count, 'h')
+    lows = Symbol_data(sym, time_frame , candle_count, 'l')
+
+
+    spread, pip = Symbol_info(sym)
+    spread *= pip
+    # print(amount)
+    if type_ == 'buy':
+
+        sl = np.mean(lows)  - spread
+
+    elif type_ == 'sell':
+        sl = np.mean(highs) + spread
+    else:
+        raise KeyError('Sl KeyWord UnRecugnized !')
+
+    return sl
+
+
+
+def candle_tp(sym, type, time_frame, candle_count = 1):
+
+    sym = sym.upper()
+    type = type.lower()
+    sym = sym.upper()
+    type_ = type.lower()
+
+    highs = Symbol_data(sym, time_frame , candle_count, 'h')
+    lows = Symbol_data(sym, time_frame , candle_count, 'l')
+
+    spread, pip = Symbol_info(sym)
+
+
+    spread *= pip
+    if type == 'buy':
+        tp = np.mean(highs) + spread 
+
+    elif type == 'sell':
+        tp = np.mean(lows) - spread 
+    else:
+        raise KeyError('KeyWord UnRecugnized !')
+    
+    return tp
 
 
 def update_sl(symbol, ):
@@ -809,20 +857,23 @@ def market_order(*, symbol: str, time_frame: str,
         sl : sl,
         "amount": amount_sl(symbol, order_type, sl_rate),
         "step"   : price_dict[order_type]  - (POINT* sl_rate)  - SPREAD,
-        "atr"   : price_dict[order_type] - Average_True_Range(symbol , time_frame, sl_rate)
+        "atr"   : price_dict[order_type] - Average_True_Range(symbol , time_frame, sl_rate),
+        "candle" : candle_sl(symbol, order_type, time_frame, sl_rate)
     }
     buy_tp = {
         tp : tp,
         "amount":  amount_tp(symbol, order_type, tp_rate),
         "step": price_dict[order_type]  + (POINT* tp_rate)  + SPREAD,
-        "atr" :  price_dict[order_type] + Average_True_Range(symbol , time_frame, tp_rate)
+        "atr" :  price_dict[order_type] + Average_True_Range(symbol , time_frame, tp_rate),
+        "candle" : candle_tp(symbol, order_type, time_frame, tp_rate)
     }
     
     sell_sl = {
         sl : sl,
         "amount": amount_sl(symbol, order_type, sl_rate),
         "step": price_dict[order_type] + SPREAD + (POINT * sl_rate),
-        "atr" : price_dict[order_type] + Average_True_Range(symbol , time_frame, sl_rate)
+        "atr" : price_dict[order_type] + Average_True_Range(symbol , time_frame, sl_rate),
+        "candle" : candle_sl(symbol, order_type, time_frame, sl_rate)
 
     }
 
@@ -830,7 +881,8 @@ def market_order(*, symbol: str, time_frame: str,
         tp : tp,
         "amount": amount_tp(symbol,  order_type, tp_rate),
         "step":price_dict[order_type] - (tp_rate * POINT) + SPREAD,
-        "atr"  : price_dict[order_type] - Average_True_Range(symbol , time_frame, tp_rate)
+        "atr"  : price_dict[order_type] - Average_True_Range(symbol , time_frame, tp_rate),
+        "candle" : candle_tp(symbol, order_type, time_frame, tp_rate)
     }
     # BUY
     if order_type == 'buy' :
@@ -852,7 +904,7 @@ def market_order(*, symbol: str, time_frame: str,
         "sl": sl ,
         "tp": tp ,
         "deviation": deviation,
-        "magic": 100,
+        "magic": 379,
         "comment": comment,
         "type_time": mt5.ORDER_TIME_GTC,
         "type_filling": mt5.ORDER_FILLING_FOK, }
