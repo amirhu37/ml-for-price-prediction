@@ -20,31 +20,25 @@ from sklearn.discriminant_analysis import StandardScaler
 import funcs
 import TradeToolKit as kit
 # -----------   Imports     --------------------------------
-from funcs import pivot_point, trade
+
 
 print(__doc__)
 # --------------INPUTS-----------------------
 logo: str = "XAUUSD"
-Time: str = "15m"
-Volume: float = 0.02
+Time: str = "30m"
+Volume: float = 0.01
 
 kill_time: str = "19:30"
 
 
-Model_addrs = "Models\\prime\\MLPClassifier  96.52%.h5"
 
-Scale_Addrs = "Models\prime\scaler.pkl"
-
-Mean_Addrs = "Models\\prime\\mean.npy"
-
-Std_Addrs = "Models\\prime\\std.npy"
 
 
 # --------- Market Varibles-------------------
 SL_rate: int = 10
-TP_rate: int = 5
+TP_rate: int = 10
 TP: Literal['step', 'str', 'amount', "candle" ] = "step"
-SL: Literal['step', 'str', 'amount', "candle" ] = "candle"
+SL: Literal['step', 'str', 'amount', "candle" ] = "step"
 # --------------- General Variables --------------------
 
 ma_1_len: int = 5
@@ -102,6 +96,23 @@ logging.basicConfig(format=LOG_FORMAT,
 logger = logging.getLogger(__name__)
 # --------------- Data Processing ----------------
 
+def journal(self, j : dict ):
+
+    print(f"""
+            {j['time']} --> {j['symbol']}, {j['volume']}
+            -------------------------------------------
+            Open : { j['Open'] }
+            Pivot : { j["pivot"] }
+            ma 1 : { j["ma 1"] }
+            ma 2 : { j["ma 2"] }
+            ------------------------------
+            order Type : {j['order']}
+            price : {j['price']}
+            StopLoss: {j['stoploss']}
+            TakeProfit: {j['takeprofit']}
+            result:  {j['comment']}
+            """)
+    return j
 
 def updator(Output: dict):
     price_now = kit.Symbol_data(logo, Time, 1, 'c', True)[0]
@@ -123,48 +134,32 @@ def updator(Output: dict):
 
 
 def main():
-    app = trade(symbol=logo,
-                time_frame=Time,
-                volume=Volume,
-
-                
-
-   )
+   
 
     time_stamp  : str  = datetime.now().strftime("%H:%M")
 
     data = [
         kit.Symbol_data(logo, Time, 1, 'o', False)[0],
         round(funcs.pivot_point(logo, Time)[0], 2),
-        round(kit.MovingAverages(logo, Time,ma_1_len, "c").sma[0], 2),
-        round(kit.MovingAverages(logo, Time,ma_2_len, "c").sma[0], 2),
+        round(funcs.moving_avg(logo, Time,ma_1_len, "c", 'sma'), 2),
+        round(funcs.moving_avg(logo, Time,ma_2_len, "c", 'sma'), 2),
+        kit.cross(logo, Time, 7,12,'sma','o', 'over'),
+        kit.cross(logo, Time, 7,12,'sma','o', 'under')
     ]
     print(data)
-    scaling = app.standarding( scale_addrs=Scale_Addrs,
-                                mean_addrs=Mean_Addrs,
-                                std_adrs=Std_Addrs,
-                                array= data)
-    
-    predict = app.predictor(   model_addres=Model_addrs,          
-                            order_dict={
-                                        1: "buy",
-                                        2: "sell",
-                                        0: "hold"},
-                            isNueran=False,
-                            data=scaling)
-    
-    print(f"{time_stamp} --> {predict}")
-    
+    predict = "buy" if (data[1] >= data[0] and data[3] == 1) else ('sell' if (data[1] <= data[0] and data[4] == 1) else "hold")
     if predict in ["buy", "sell"]:
         print(predict)
         if not mt5.positions_get(symbol=logo):
-            request, result = app.send_order(
-                position=predict,
-                sl_type=SL,
-                tp_type=TP,
-                sl_rate=SL_rate,
-                tp_rate=TP_rate,
-                Comment="class")
+            request, result =  kit.market_order(
+                symbol=logo,
+                volume=Volume,
+                time_frame=Time,
+                order_type= predict,
+                sl= SL,
+                tp=TP,
+                comment="pvg")
+            
 
             total = {
                 "time": time_stamp,
@@ -181,7 +176,7 @@ def main():
                 "takeprofit": request['tp'],
                 "comment": result['comment']}
 
-            journal = app.journal(total)
+            journal = journal(total)
             logger.info(",".join(str(value) for value in journal.values()))
             return {"price_open": data[0], 'type': predict, "comment": result['comment']}
         else:
