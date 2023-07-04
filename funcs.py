@@ -12,9 +12,9 @@ import TradeToolKit as kit
 def moving_avg(sym, time_frame, ma_len, ohlc: Literal['o', 'h', 'l', 'c'], ma_type: Literal['sma', 'ema']) -> float:
     data = kit.Symbol_data(sym, time_frame, ma_len, ohlc)
     if ma_type == 'sma':
-        return kit.MovingAverages(data).sma[0]
+        return kit.MovingAverages(data).sma
     elif ma_type == 'ema':
-        return kit.MovingAverages(data).ema[0]
+        return kit.MovingAverages(data).ema
     else:
         return "Invalid"
 
@@ -190,8 +190,9 @@ class trade:
 
         return request, result
 
-    def regression(self, d, rate: int):
-        model = joblib.load(self.model_addres)
+    def regression(self, d, rate: int,
+                   model_addres: str):
+        model = joblib.load(model_addres)
         pr = model.predict(d)
         pr = pr[:, 0]
         d = d[0]
@@ -201,9 +202,9 @@ class trade:
         diff = pr - d
         diff = diff[0]
 
-        if pr[-1] > d[-1] and diff >= rate:
+        if pr[-1] > d and diff >= rate:
             return 'buy', diff
-        elif pr[-1] < d[-1] and diff <= -rate:
+        elif pr[-1] < d and diff <= -rate:
             return 'sell', diff
         else:
             return 'hold', diff
@@ -212,11 +213,6 @@ class trade:
 
         print(f"""
               {j['time']} --> {j['symbol']}, {j['volume']}
-              -------------------------------------------
-              Open : { j['Open'] }
-              Pivot : { j["pivot"] }
-              ma 1 : { j["ma 1"] }
-              ma 2 : { j["ma 2"] }
               ------------------------------
               order Type : {j['order']}
               price : {j['price']}
@@ -226,3 +222,6 @@ class trade:
               """)
 
         return j
+
+# while True:
+#     mt5.account_info()._asdict()

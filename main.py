@@ -6,27 +6,24 @@ homo Homini Lupos
 import logging
 import os
 import traceback
-# from tensorflow.keras.models import load_model
 from datetime import datetime
 from os.path import exists
 from time import sleep
-from typing import List, Literal, Type
+from typing import  Literal
 
-import joblib
+
 import MetaTrader5 as mt5
-import numpy as np
-from sklearn.discriminant_analysis import StandardScaler
 
 import funcs
 import TradeToolKit as kit
 # -----------   Imports     --------------------------------
-from funcs import pivot_point, trade
+from funcs import  trade
 
 print(__doc__)
 # --------------INPUTS-----------------------
-logo: str = "XAUUSD"
-Time: str = "15m"
-Volume: float = 0.02
+logo: Literal['XAUUSD', "GBPUSD", "EURUSD"] = input("Enter Symbol: ").upper()
+Time: Literal['5m', "15m", "30m", "1h"] = input('Time Frame: ')
+Volume: float = 0.01
 
 kill_time: str = "19:30"
 
@@ -43,8 +40,10 @@ Std_Addrs = "Models\\prime\\std.npy"
 # --------- Market Varibles-------------------
 SL_rate: int = 10
 TP_rate: int = 5
+
+SL: Literal['step', 'str', 'amount', "candle" ] = "step"
 TP: Literal['step', 'str', 'amount', "candle" ] = "step"
-SL: Literal['step', 'str', 'amount', "candle" ] = "candle"
+
 # --------------- General Variables --------------------
 
 ma_1_len: int = 5
@@ -126,9 +125,6 @@ def main():
     app = trade(symbol=logo,
                 time_frame=Time,
                 volume=Volume,
-
-                
-
    )
 
     time_stamp  : str  = datetime.now().strftime("%H:%M")
@@ -136,8 +132,9 @@ def main():
     data = [
         kit.Symbol_data(logo, Time, 1, 'o', False)[0],
         round(funcs.pivot_point(logo, Time)[0], 2),
-        round(kit.MovingAverages(logo, Time,ma_1_len, "c").sma[0], 2),
-        round(kit.MovingAverages(logo, Time,ma_2_len, "c").sma[0], 2),
+        round(funcs.moving_avg(logo, Time,ma_1_len, "c", 'sma'), 2),
+        round(funcs.moving_avg(logo, Time,ma_2_len, "c", 'sma'), 2),
+
     ]
     print(data)
     scaling = app.standarding( scale_addrs=Scale_Addrs,
@@ -194,38 +191,39 @@ def main():
 # print(main  ())
 ###         EXECUTE      ###
 counter = 0
-while True:
-    # break
-    try:
+if __name__ == '__main__':
+    while True:
+        # break
+        try:
 
-        if datetime.now().strftime('%M') in regiluzer[Time]:
-            try:
-                os.system('cls')
-                out = main()
-                print(out)
-                sleep(Time_dct[Time] * 60)
-                funcs.close_by_time(logo, True)
-                funcs.kill_app(kill_time)
-            except Exception as e:
-                print(f"""Exception Error: \n {e}
-                            {traceback.print_exc()}""")
-
-            if mt5.positions_get(symbol=logo):
+            if datetime.now().strftime('%M') in regiluzer[Time]:
                 try:
-                    updator(Output=out)
-                except:
-                    sleep(1)
+                    os.system('cls')
+                    out = main()
+                    print(out)
+                    sleep(Time_dct[Time] * 60)
+                    funcs.close_by_time(logo, False)
+                    funcs.kill_app(kill_time)
+                except Exception as e:
+                    print(f"""Exception Error: \n {e}
+                                {traceback.print_exc()}""")
 
-        else:
-            os.system('cls')
-            print(f"""
-                    wait to be regulize
-                    {logo} {Volume}  {Time} \n
-                    {datetime.now().strftime('%H:%M:%S')}""")
+                if mt5.positions_get(symbol=logo):
+                    try:
+                        updator(Output=out)
+                    except:
+                        sleep(1)
+
+            else:
+                os.system('cls')
+                print(f"""
+                        wait to be regulize
+                        {logo} {Volume}  {Time} \n
+                        {datetime.now().strftime('%H:%M:%S')}""")
+                sleep(1)
+                funcs.kill_app(kill_time)
+        except Exception as e:
+            print(f"""Exception Error: \n {e}
+                    {traceback.print_exc()}""")
             sleep(1)
-            funcs.kill_app(kill_time)
-    except Exception as e:
-        print(f"""Exception Error: \n {e}
-                {traceback.print_exc()}""")
-        sleep(1)
-        continue
+            continue

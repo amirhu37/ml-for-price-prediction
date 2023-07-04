@@ -1,3 +1,4 @@
+
 # -----------   Document    --------------------------------
 """
 homo Homini Lupos
@@ -10,12 +11,9 @@ import traceback
 from datetime import datetime
 from os.path import exists
 from time import sleep
-from typing import List, Literal, Type
+from typing import  Literal 
 
-import joblib
 import MetaTrader5 as mt5
-import numpy as np
-from sklearn.discriminant_analysis import StandardScaler
 
 import funcs
 import TradeToolKit as kit
@@ -25,7 +23,7 @@ import TradeToolKit as kit
 print(__doc__)
 # --------------INPUTS-----------------------
 logo: str = "XAUUSD"
-Time: str = "30m"
+Time: str = "5m"
 Volume: float = 0.01
 
 kill_time: str = "19:30"
@@ -37,8 +35,8 @@ kill_time: str = "19:30"
 # --------- Market Varibles-------------------
 SL_rate: int = 10
 TP_rate: int = 10
-TP: Literal['step', 'str', 'amount', "candle" ] = "step"
-SL: Literal['step', 'str', 'amount', "candle" ] = "step"
+SL: Literal['step', 'atr', 'amount', "candle" ] = "candle"
+TP: Literal['step', 'atr', 'amount', "candle" ] = "step"
 # --------------- General Variables --------------------
 
 ma_1_len: int = 5
@@ -138,16 +136,21 @@ def main():
 
     time_stamp  : str  = datetime.now().strftime("%H:%M")
 
-    data = [
-        kit.Symbol_data(logo, Time, 1, 'o', False)[0],
-        round(funcs.pivot_point(logo, Time)[0], 2),
-        round(funcs.moving_avg(logo, Time,ma_1_len, "c", 'sma'), 2),
-        round(funcs.moving_avg(logo, Time,ma_2_len, "c", 'sma'), 2),
-        kit.cross(logo, Time, 7,12,'sma','o', 'over'),
-        kit.cross(logo, Time, 7,12,'sma','o', 'under')
-    ]
+    data = {  
+        "Open" : kit.Symbol_data(logo, Time, 1, 'o', False)[0],
+        "Pivot" : round(funcs.pivot_point(logo, Time)[0], 2),
+        "ma 1" : round(funcs.moving_avg(logo, Time,ma_1_len, "c", 'sma'), 2),
+        "ma 2" : round(funcs.moving_avg(logo, Time,ma_2_len, "c", 'sma'), 2),
+        "crossover" : kit.cross(logo, Time, ma_1_len,ma_2_len,'sma','o', 'over'),
+        "crosunder" : kit.cross(logo, Time, ma_1_len,ma_2_len,'sma','o', 'under')}
+    
     print(data)
-    predict = "buy" if (data[1] >= data[0] and data[3] == 1) else ('sell' if (data[1] <= data[0] and data[4] == 1) else "hold")
+    predict = 'hold'
+    if ((data['Pivot'] >= data['Open']) and data['crossover'] == 1):
+        predict = "buy"
+    elif ((data['Pivot'] <= data['Open']) and data['crosunder'] == 1):
+        predict = 'sell'
+
     if predict in ["buy", "sell"]:
         print(predict)
         if not mt5.positions_get(symbol=logo):
@@ -164,10 +167,10 @@ def main():
             total = {
                 "time": time_stamp,
                 "price": request['price'],
-                "Open": data[0],
-                "pivot": data[1],
-                "ma 1": data[2],
-                "ma 2": data[3],
+                "Open": data['Open'],
+                "pivot": data['Pivot'],
+                "ma 1": data['ma 1'],
+                "ma 2": data['ma 2'],
 
                 "symbol": logo,
                 "volume": Volume,
@@ -199,7 +202,7 @@ while True:
                 out = main()
                 print(out)
                 sleep(Time_dct[Time] * 60)
-                funcs.close_by_time(logo, True)
+                funcs.close_by_time(logo, False)
                 funcs.kill_app(kill_time)
             except Exception as e:
                 print(f"""Exception Error: \n {e}

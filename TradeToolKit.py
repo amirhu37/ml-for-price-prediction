@@ -27,6 +27,7 @@ time_perid = {
     '5m':      mt5.TIMEFRAME_M5,
     '15m':     mt5.TIMEFRAME_M15,
     '30m':     mt5.TIMEFRAME_M30,
+    '16385m':     mt5.TIMEFRAME_H1,
     '1h':     mt5.TIMEFRAME_H1,
     '4h':    mt5.TIMEFRAME_H4,
     '1d':    mt5.TIMEFRAME_D1,
@@ -89,18 +90,27 @@ class MovingAverages:
         self.data = data
         self.window = len(data)
     def Simple(self,):
-        # data = self.bars
-        weights = np.repeat(1.0, self.window) / self.window
-        return np.convolve(self.data, weights, 'valid')
+        return np.mean(self.data)
 
-    def Exponintial(self, alpha=0.5):
-        data = self.bars
-        weights = np.exp(np.linspace(-1., 0., self.window))
-        weights /= weights.sum()
-        a = np.convolve(data, weights, mode='full')[:len(data)]
-        b = np.ones_like(data)
-        b[:self.window] = data[:self.window]
-        return a * alpha + b * (1 - alpha)
+    def Exponintial(self,):
+        data = self.data
+        window = len(data)
+        alpha = 2 /(window + 1.0)
+        alpha_rev = 1-alpha
+        n = data.shape[0]
+
+        pows = alpha_rev**(np.arange(n+1))
+
+        scale_arr = 1/pows[:-1]
+        offset = data[0]*pows[1:]
+        pw0 = alpha*alpha_rev**(n-1)
+
+        mult = data*pw0*scale_arr
+        cumsums = mult.cumsum()
+        out = offset + cumsums*scale_arr[::-1]
+        return out[-1]
+
+
 
     @property
     def sma(self):
@@ -200,30 +210,57 @@ class Patterns:
         self.bars = mt5.copy_rates_from_pos(
             symbol, time_perid[time_frame], 1, bar_range)
 
-    def engulfing(self) -> tuple:
+    def engulfing_pine(self) -> tuple[str, str, float, float]:
         "I'll help you to find 'engulfing' pattern. Ascendig & Descendig"
-        # Candle 1
-        self.open_1: float = self.candles_eng[1][1]
-        self.High_1: float = self.candles_eng[1][2]
-        self.low_1: float = self.candles_eng[1][3]
-        self.close_1: float = self.candles_eng[1][4]
-        # Candle 2
-        self.open_2: float = self.candles_eng[2][1]
-        self.High_2: float = self.candles_eng[2][2]
-        self.low_2: float = self.candles_eng[2][3]
-        self.close_2: float = self.candles_eng[2][4]
-        # Proces
-        self.body_1: float = self.close_1 - self.open_1    # is it + or - ->  close - open
-        self.body_2: float = self.close_2 - self.open_2    # is it + or - ->  close - open
-        # Check Conditions
-        if (self.body_1 < 0) and (self.body_2 > 0) and (abs(self.body_1) * 1.5 < self.body_2):
-            return 'buy', 'Double Ascendig', self.open_2, self.low_1
+        # Candles 
+        open: float = Symbol_data(self.symbol, self.timeframe, 2, 'o' )
+        high: float = Symbol_data(self.symbol, self.timeframe, 2, 'h' )
+        low: float = Symbol_data(self.symbol, self.timeframe, 2, 'l' )
+        close: float = Symbol_data(self.symbol, self.timeframe, 2, 'c' )
 
-        elif (self.body_1 > 0) and (self.body_2 < 0) and (self.body_1 * 1.5 < abs(self.body_2)):
-            return 'sell', 'Double Descendig', self.High_1, self.open_2
+        # Proces
+        bulish_candel = (close[0] < open[0]) and (close[1] > open[1]
+                                                  ) and (low[1] < low[0]
+                                                         ) and (high[1] > high[0] )
+        bearsh_candel = (close[0] > open[0]) and (close[1] < open[1]
+                                                  ) and (low[1] < low[0]
+                                                         ) and (high[1] > high[0] )
+
+        # Check Conditions
+        if bulish_candel:
+            return 'buy'
+
+        elif bearsh_candel:
+            return 'sell'
 
         else:
-            return 'No Position', 'No Pattern', None, None
+            return 'No'
+
+
+    def engulfing(self, threashold = 1.05) -> tuple:
+        "I'll help you to find 'engulfing' pattern. Ascendig & Descendig"
+        # Candles
+        opens  =  Symbol_data(self.symbol, self.timeframe, 2, 'open')
+        Highs  =  Symbol_data(self.symbol, self.timeframe, 2,'h')
+        lows   =  Symbol_data(self.symbol, self.timeframe, 2,'l')
+        closes =  Symbol_data(self.symbol, self.timeframe, 2,'c')
+        
+        # Proces
+        body_1: float = closes[0] - opens[0] # last candel
+        body_2: float = closes[1] - opens[1] # now candel
+        # Check Conditions
+        bulish = (body_1 <0)  and (body_2 > 0) and (abs(body_1) * threashold < abs(body_2))
+        bearish = (body_1 > 0)  and (body_2 < 0) and (abs(body_1) * threashold < abs(body_2))
+        if bulish:
+            return 'buy'
+
+        elif bearish:
+            return 'sell'
+
+        else:
+            return 'No'
+
+
 
     def doji(self) -> tuple:
         "I'll help you to find 'doji' pattern. Ascendig & Descendig"
@@ -243,23 +280,23 @@ class Patterns:
         self.low_3: float = self.candles_doj[3][3]
         self.close_3: float = self.candles_doj[3][4]
         # Proces
-        self.body_1: float = self.close_1 - self.open_1    # is it + or - ->  close - open
-        self.body_2: float = self.close_2 - self.open_2    # is it + or - ->  close - open
-        self.body_3: float = self.close_3 - self.open_3    # is it + or - ->  close - open
+        self.body_1: float = self.open_1 - self.close_1    # is it + or - ->  close - open
+        self.body_2: float = self.open_2 - self.close_2    # is it + or - ->  close - open
+        self.body_3: float = self.open_3 - self.close_3    # is it + or - ->  close - open
         self.z = abs(self.High_2 - self.open_2)
         self.y = abs(self.low_2 - self.close_2)
         self.x = abs(self.close_2 - self.open_2)
         # Conditios
         if (self.body_1 < 0.) and (self.body_3 > 0.) and (1.001 >= self.x >= 0.001):
             # (self.low_2 / self.open_2 == 1.00) and (0.8 < self.High_2 / self.close_2 > 0.85):
-            return 'buy', 'Acending Doji', self.low_2, self.open_2
+            return 'buy'
 
         elif (self.body_1 > 0.) and (self.body_3 < 0.) and (1.001 >= self.x >= 0.001):
             # (self.High_2 / self.close_2 == 1.00) and (0.9 < self.low_2 / self.open_2 < 0.99):
-            return 'sell', 'Decending Doji', self.open_2, self.High_2
+            return 'sell'
 
         else:
-            return 'No Position', 'No Pattern', None, None
+            return 'No Position'
 
     def threes(self) -> tuple:
         """I'll help you to find 'Three soldires/Ravens' pattern.
@@ -291,13 +328,13 @@ class Patterns:
         self.body_3: float = self.close_3 - self.open_3    # is it + or - ->  close - open
         # Conditions
         if (self.body_0 < 0) and (self.body_1 > 0) and (self.body_2 > 0) and (self.body_3 > 0):
-            return 'buy', 'Three Soldires', self.open_1, self.low_1
+            return 'buy'
 
         elif (self.body_0 > 0) and (self.body_1 < 0) and (self.body_2 < 0) and (self.body_3 < 0):
-            return 'sell', "three Ravens", self.open_1, self.High_2
+            return 'sell'
 
         else:
-            return 'No Position', 'No Pattern', None, None
+            return 'No Position'
 
 # Support - Resistance Area
 
@@ -515,12 +552,9 @@ def bollinger_bands(symbol: str, time_frame: str, time_window: int, method: str)
             return rsi
 
 
-def _moving_average_split(symbol: str, time_frame: str, time_window: int,  OHLC: str, ma_method : Literal['ema', 'sma']):
-    prices = Symbol_data(symbol,  time_frame, time_window *2,  OHLC)
-    half = len(prices) // 2
-    prices_1 = prices[: half ]
-    prices_2 = prices[half:  ]
-
+def moving_average(symbol: str, time_frame: str, time_window: int,  OHLC: str, ma_method : Literal['ema', 'sma']):
+    prices_1 = Symbol_data(symbol,  time_frame, time_window +1  ,  OHLC)[:-1]
+    prices_2 = Symbol_data(symbol,  time_frame, time_window  ,  OHLC)
     if ma_method == 'sma':
         ma_1 = MovingAverages(prices_1).sma
         ma_2 = MovingAverages(prices_2).sma
@@ -534,10 +568,9 @@ def _moving_average_split(symbol: str, time_frame: str, time_window: int,  OHLC:
  
 
 
-
 def cross(sym : str, time_frame : str, fast_ma_len: int, slow_ma_len : int , ma_method : Literal['ema', 'sma'] , OHLC : Literal['o', 'h', 'l', 'c'], cross_type : Literal['over', "under" ]):
-    fast_ma1, fast_ma2 = _moving_average_split(sym, time_frame , fast_ma_len,OHLC, ma_method)
-    slow_ma1, slow_ma2 = _moving_average_split(sym, time_frame , slow_ma_len,OHLC, ma_method)
+    fast_ma1, fast_ma2 = moving_average(sym, time_frame , fast_ma_len,OHLC, ma_method)
+    slow_ma1, slow_ma2 = moving_average(sym, time_frame , slow_ma_len,OHLC, ma_method)
     if cross_type == "over":
         if fast_ma1 <= slow_ma1 and fast_ma2 > slow_ma2:
             return 1
@@ -555,12 +588,12 @@ def cross(sym : str, time_frame : str, fast_ma_len: int, slow_ma_len : int , ma_
 
 def macd(symbol: str, time_frame: str, fast: int, slow: int, ma_method : Literal['ema', 'sma'], ohlc: str):
     if ma_method == 'sma':
-        slow_ma = MovingAverages(symbol, time_frame, slow, ohlc).sma
-        fast_ma = MovingAverages(symbol, time_frame, fast, ohlc).ema
+        slow_ma = moving_average(symbol, time_frame, slow, ohlc).sma
+        fast_ma = moving_average(symbol, time_frame, fast, ohlc).ema
         return fast_ma - slow_ma
     if ma_method == 'ema':
-        slow_ma = MovingAverages(symbol, time_frame, slow, ohlc).ema
-        fast_ma = MovingAverages(symbol, time_frame, fast, ohlc).ema
+        slow_ma = moving_average(symbol, time_frame, slow, ohlc).ema
+        fast_ma = moving_average(symbol, time_frame, fast, ohlc).ema
         return fast_ma - slow_ma
 
 
